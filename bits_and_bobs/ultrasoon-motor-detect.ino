@@ -2,44 +2,80 @@
 const int echoPin = 9;
 const int trigPin = 10;
 
-// variabelen
-long duration;
-int distance;
+// variables
+int distance = 0;
+
+void getDistance() {
+  static int state = 0;
+  static unsigned long timer = 0;
+  static unsigned long echoStart = 0;
+
+  unsigned long now = micros();
+
+  switch (state) {
+    case 0: // cooldown between measurements (~60ms)
+      if (now - timer >= 60000) {
+        digitalWrite(trigPin, LOW);
+        timer = now;
+        state = 1;
+      }
+      break;
+
+    case 1: // wait 4us LOW
+      if (now - timer >= 4) {
+        digitalWrite(trigPin, HIGH);
+        timer = now;
+        state = 2;
+      }
+      break;
+
+    case 2: // wait 10us HIGH
+      if (now - timer >= 10) {
+        digitalWrite(trigPin, LOW);
+        timer = now;
+        state = 3;
+      }
+      break;
+
+    case 3: // wait for echo HIGH (timeout 30ms)
+      if (digitalRead(echoPin) == HIGH) {
+        echoStart = now;
+        state = 4;
+      } else if (now - timer > 30000) {
+        timer = now;
+        state = 0; // timeout, restart
+      }
+      break;
+
+    case 4: // wait for echo LOW (timeout 30ms)
+      if (digitalRead(echoPin) == LOW) {
+        unsigned long echoTime = now - echoStart;
+        if (echoTime > 25000) {
+          timer = now;
+          state = 0;
+          break;
+        }
+        distance = echoTime * 0.0343 / 2;
+        newReading = true;
+        timer = now;
+        state = 0;
+      } else if (now - echoStart > 30000) {
+        timer = now;
+        state = 0; // timeout, restart
+      }
+      break;
+  }
+}
 
 void setup() {
-  // put your setup code here, to run once:
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
+  digitalWrite(trigPin, LOW);
 
-  Serial.begin(9600); // Start de serial communicatie
+  delay(50); // Give sensor time to stabilize
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
-
-  // stuur ultrasonic pulse
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
-
-  // lees echo tijd
-  duration = pulseIn(echoPin, HIGH);
-
-  // afstand berekenen
-  distance = duration * 0.034 / 2;
-  
-  // print afstand
-  Serial.print("Distance: ");
+  getDistance();
   Serial.print(distance);
-  Serial.println(" cm");
-  
-  // obstacle detection
-  if (distance <= 20) {
-    Serial.println("Obstacle detected!");
-  }
-
-  delay(300);
 }
-
